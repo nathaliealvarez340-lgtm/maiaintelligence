@@ -1,0 +1,36 @@
+# Default repository ownership.
+* @nathalievalvarez340-lgtm
+
+# GitHub governance and repository automation.
+.github/ @nathalievalvarez340-lgtm
+
+# Documentation ownership.
+docs/ @nathalievalvarez340-lgtm
+docs/01-architecture/ @nathalievalvarez340-lgtm
+docs/02-ADR/ @nathalievalvarez340-lgtm
+docs/03-RFC/ @nathalievalvarez340-lgtm
+docs/04-SPEC/ @nathalievalvarez340-lgtm
+docs/05-standards/ @nathalievalvarez340-lgtm
+docs/06-diagrams/ @nathalievalvarez340-lgtm
+docs/07-research/ @nathalievalvarez340-lgtm
+docs/08-project-management/ @nathalievalvarez340-lgtm
+docs/09-decisions/ @nathalievalvarez340-lgtm
+
+# Database schema, migrations, and generated database artifacts.
+prisma/ @nathalievalvarez340-lgtm
+
+# Application and shared source code.
+src/ @nathalievalvarez340-lgtm
+
+# Root engineering and governance documents.
+README.md @nathalievalvarez340-lgtm
+MAIA_ARCHITECTURE.md @nathalievalvarez340-lgtm
+ENGINEERING_PHILOSOPHY.md @nathalievalvarez340-lgtm
+CONTRIBUTING.md @nathalievalvarez340-lgtm
+
+# Package and project configuration.
+package.json @nathalievalvarez340-lgtm
+pnpm-lock.yaml @nathalievalvarez340-lgtm
+pnpm-workspace.yaml @nathalievalvarez340-lgtm
+next.config.ts @nathalievalvarez340-lgtm
+tsconfig.json @nathalievalvarez340-lgtm
