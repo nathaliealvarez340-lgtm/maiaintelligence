@@ -1,6 +1,25 @@
-node_modules
-.next
-coverage
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+
+# Build
+coverage/
 *.log
+*.tsbuildinfo
+
+# Environment
 .env*
 !.env.example
+
+# Vercel
+.vercel/
+
+# Operating System
+desktop.ini
+Thumbs.db
+.DS_Store
+.env*
+
+/src/generated/prisma
