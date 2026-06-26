@@ -1,0 +1,416 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/**
+ * MAIA Intelligence Core
+ * Sprint 1 Foundation Schema
+ */
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum TenantPlan {
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum OrganizationType {
+  INTERNAL
+  CLIENT
+  COMMUNITY
+  PARTNER
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+  ARCHIVED
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MANAGER
+  MEMBER
+  CLIENT
+  VIEWER
+}
+
+enum OwnerType {
+  USER
+  ORGANIZATION
+  PRODUCT
+  TENANT
+}
+
+enum MemoryType {
+  PROFILE
+  BUSINESS
+  CLIENT
+  PROJECT
+  OPERATIONAL
+  STRATEGIC
+  PREFERENCE
+  SYSTEM
+}
+
+enum SecurityLevel {
+  PUBLIC
+  INTERNAL
+  SENSITIVE
+  RESTRICTED
+}
+
+enum MemoryStatus {
+  ACTIVE
+  REVIEW
+  ARCHIVED
+}
+
+enum SensitiveSessionMode {
+  READ
+  FULL
+}
+
+enum SensitiveAuditAction {
+  SETUP_CODE
+  VERIFY_SUCCESS
+  VERIFY_FAILED
+  LOCKOUT
+  REVOKE_SESSION
+  EXPIRE_SESSION
+  ACCESS_GRANTED
+  ACCESS_DENIED
+}
+
+enum AuditResult {
+  SUCCESS
+  FAILED
+  DENIED
+  LOCKED
+  EXPIRED
+}
+
+enum ConversationStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum ProductContextKey {
+  MAIA
+  MIKAELSON
+  OFF
+  ORBIT
+}
+
+model Tenant {
+  id     String       @id @default(cuid())
+  name   String
+  slug   String       @unique
+  status TenantStatus @default(ACTIVE)
+  plan   TenantPlan   @default(STARTER)
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  organizations      Organization[]
+  memberships        Membership[]
+  productContexts    ProductContext[]
+  memories           Memory[]
+  sensitiveAccesses  SensitiveAccess[]
+  sensitiveSessions  SensitiveSession[]
+  sensitiveAuditLogs SensitiveAuditLog[]
+  conversations      Conversation[]
+  aiTraces           AITrace[]
+
+  @@index([status])
+  @@index([plan])
+}
+
+model Organization {
+  id       String             @id @default(cuid())
+  tenantId String
+  name     String
+  type     OrganizationType   @default(CLIENT)
+  status   OrganizationStatus @default(ACTIVE)
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  memberships Membership[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([status])
+}
+
+model User {
+  id          String     @id @default(cuid())
+  clerkUserId String     @unique
+  email       String     @unique
+  name        String?
+  status      UserStatus @default(ACTIVE)
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  memberships        Membership[]
+  memoriesCreated    Memory[]            @relation("MemoryCreatedBy")
+  memoryVersions     MemoryVersion[]     @relation("MemoryVersionCreatedBy")
+  sensitiveAccesses  SensitiveAccess[]
+  sensitiveSessions  SensitiveSession[]
+  sensitiveAuditLogs SensitiveAuditLog[]
+  conversations      Conversation[]
+  aiTraces           AITrace[]
+
+  @@index([email])
+  @@index([status])
+}
+
+model Membership {
+  id             String @id @default(cuid())
+  tenantId       String
+  organizationId String
+  userId         String
+  role           Role
+  permissions    Json
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, organizationId, userId])
+  @@index([tenantId])
+  @@index([organizationId])
+  @@index([userId])
+  @@index([role])
+}
+
+model ProductContext {
+  id       String            @id @default(cuid())
+  tenantId String
+  key      ProductContextKey
+  name     String
+  tone     String
+  enabled  Boolean           @default(true)
+  limits   Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@index([key])
+}
+
+model Memory {
+  id            String        @id @default(cuid())
+  tenantId      String
+  ownerType     OwnerType
+  ownerId       String
+  type          MemoryType
+  content       String        @db.Text
+  confidence    Int           @default(80)
+  securityLevel SecurityLevel @default(INTERNAL)
+  status        MemoryStatus  @default(ACTIVE)
+
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  archivedAt  DateTime?
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  createdBy User?  @relation("MemoryCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  versions MemoryVersion[]
+
+  @@index([tenantId])
+  @@index([ownerType, ownerId])
+  @@index([type])
+  @@index([securityLevel])
+  @@index([status])
+}
+
+model MemoryVersion {
+  id              String  @id @default(cuid())
+  memoryId        String
+  previousContent String  @db.Text
+  newContent      String  @db.Text
+  reason          String
+  createdById     String?
+
+  createdAt DateTime @default(now())
+
+  memory    Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+  createdBy User?  @relation("MemoryVersionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([memoryId])
+  @@index([createdById])
+}
+
+model SensitiveAccess {
+  id             String    @id @default(cuid())
+  userId         String
+  tenantId       String
+  codeHash       String
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  sessions SensitiveSession[]
+
+  @@unique([userId, tenantId])
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model SensitiveSession {
+  id        String               @id @default(cuid())
+  userId    String
+  tenantId  String
+  accessId  String?
+  mode      SensitiveSessionMode
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  access SensitiveAccess? @relation(fields: [accessId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+}
+
+model SensitiveAuditLog {
+  id       String               @id @default(cuid())
+  userId   String?
+  tenantId String
+  action   SensitiveAuditAction
+  result   AuditResult
+  reason   String?
+
+  createdAt DateTime @default(now())
+
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([action])
+  @@index([result])
+  @@index([createdAt])
+}
+
+model Conversation {
+  id             String             @id @default(cuid())
+  tenantId       String
+  userId         String
+  productContext ProductContextKey
+  title          String?
+  status         ConversationStatus @default(ACTIVE)
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  messages Message[]
+  aiTraces AITrace[]
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([productContext])
+  @@index([status])
+}
+
+model Message {
+  id             String        @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String        @db.Text
+  securityLevel  SecurityLevel @default(INTERNAL)
+  tokenCount     Int?
+
+  createdAt DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([role])
+  @@index([securityLevel])
+  @@index([createdAt])
+}
+
+model AITrace {
+  id                   String            @id @default(cuid())
+  requestId            String            @unique
+  tenantId             String
+  userId               String?
+  conversationId       String?
+  productContext       ProductContextKey
+  modelProvider        String
+  modelName            String
+  permissionsEvaluated Json?
+  sensitiveSessionUsed Boolean           @default(false)
+  confidenceSummary    String?
+  costEstimate         Decimal?          @db.Decimal(10, 6)
+  summary              String?           @db.Text
+
+  createdAt DateTime @default(now())
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([conversationId])
+  @@index([productContext])
+  @@index([createdAt])
+}

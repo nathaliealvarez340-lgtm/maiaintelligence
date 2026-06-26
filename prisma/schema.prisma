@@ -1,0 +1,1495 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/**
+ * MAIA Intelligence Core
+ * Sprint 1 Foundation Schema
+ */
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum TenantPlan {
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum OrganizationType {
+  INTERNAL
+  CLIENT
+  COMMUNITY
+  PARTNER
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+  ARCHIVED
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MANAGER
+  MEMBER
+  CLIENT
+  VIEWER
+}
+
+enum OwnerType {
+  USER
+  ORGANIZATION
+  PRODUCT
+  TENANT
+}
+
+enum MemoryType {
+  PROFILE
+  BUSINESS
+  CLIENT
+  PROJECT
+  OPERATIONAL
+  STRATEGIC
+  PREFERENCE
+  SYSTEM
+}
+
+enum SecurityLevel {
+  PUBLIC
+  INTERNAL
+  SENSITIVE
+  RESTRICTED
+}
+
+enum MemoryStatus {
+  ACTIVE
+  REVIEW
+  ARCHIVED
+}
+
+enum SensitiveSessionMode {
+  READ
+  FULL
+}
+
+enum SensitiveAuditAction {
+  SETUP_CODE
+  VERIFY_SUCCESS
+  VERIFY_FAILED
+  LOCKOUT
+  REVOKE_SESSION
+  EXPIRE_SESSION
+  ACCESS_GRANTED
+  ACCESS_DENIED
+}
+
+enum AuditResult {
+  SUCCESS
+  FAILED
+  DENIED
+  LOCKED
+  EXPIRED
+}
+
+enum ConversationStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum ProductContextKey {
+  MAIA
+  MIKAELSON
+  OFF
+  ORBIT
+}
+
+enum UsageType {
+  AI_TOKENS
+  STORAGE
+  JOB
+  TOOL_EXECUTION
+  DOCUMENT_PROCESSING
+  EMBEDDING
+  RAG_SEARCH
+  WEBHOOK
+}
+
+enum CostLedgerEntryType {
+  DEBIT
+  CREDIT
+  ADJUSTMENT
+}
+
+enum CostBudgetPeriod {
+  DAILY
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+}
+
+enum CostAlertStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  READ
+  DISMISSED
+  FAILED
+}
+
+enum NotificationSeverity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  WEBHOOK
+}
+
+enum ToolStatus {
+  ACTIVE
+  DISABLED
+  ARCHIVED
+}
+
+enum ToolExecutionStatus {
+  PENDING
+  AWAITING_CONFIRMATION
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+enum ToolConfirmationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum EventStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+  CANCELLED
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  RETRYING
+  DELIVERED
+  FAILED
+  DISABLED
+}
+
+enum ModelProviderStatus {
+  ACTIVE
+  DEGRADED
+  DISABLED
+  ARCHIVED
+}
+
+enum RoutingDecisionStatus {
+  SELECTED
+  FALLBACK
+  FAILED
+  CANCELLED
+}
+
+enum KnowledgeSourceType {
+  UPLOAD
+  URL
+  INTEGRATION
+  MANUAL
+}
+
+enum KnowledgeSourceStatus {
+  ACTIVE
+  DISABLED
+  ARCHIVED
+}
+
+enum DocumentStatus {
+  UPLOADED
+  PROCESSING
+  READY
+  FAILED
+  ARCHIVED
+}
+
+enum EmbeddingStatus {
+  PENDING
+  INDEXED
+  FAILED
+  STALE
+}
+
+enum AuditEventType {
+  AUTHENTICATION
+  AUTHORIZATION
+  SECURITY
+  MEMORY
+  AI
+  TOOL
+  EVENT
+  COST
+  NOTIFICATION
+  API
+  SYSTEM
+}
+
+enum RequestStatus {
+  RECEIVED
+  SUCCEEDED
+  FAILED
+  DENIED
+  RATE_LIMITED
+}
+
+enum ApiKeyStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum WebhookEndpointStatus {
+  ACTIVE
+  DISABLED
+  ARCHIVED
+}
+
+enum SystemLogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+  FATAL
+}
+
+model Tenant {
+  id     String       @id @default(cuid())
+  name   String
+  slug   String       @unique
+  status TenantStatus @default(ACTIVE)
+  plan   TenantPlan   @default(STARTER)
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  organizations      Organization[]
+  memberships        Membership[]
+  productContexts    ProductContext[]
+  memories           Memory[]
+  sensitiveAccesses  SensitiveAccess[]
+  sensitiveSessions  SensitiveSession[]
+  sensitiveAuditLogs SensitiveAuditLog[]
+  conversations      Conversation[]
+  aiTraces           AITrace[]
+  usageRecords       UsageRecord[]
+  costLedgers        CostLedger[]
+  costBudgets        CostBudget[]
+  costAlerts         CostAlert[]
+  notifications      Notification[]
+  notificationPrefs  NotificationPreference[]
+  notificationEvents NotificationEvent[]
+  toolRegistries     ToolRegistry[]
+  toolExecutions     ToolExecution[]
+  toolConfirmations  ToolConfirmation[]
+  domainEvents       DomainEvent[]
+  outboxEvents       OutboxEvent[]
+  webhookDeliveries  WebhookDelivery[]
+  modelProviders     ModelProvider[]
+  modelRoutes        ModelRoute[]
+  routingPolicies    RoutingPolicy[]
+  routingDecisions   RoutingDecision[]
+  providerUsages     ProviderUsage[]
+  knowledgeSources   KnowledgeSource[]
+  documents          Document[]
+  documentChunks     DocumentChunk[]
+  documentEmbeddings DocumentEmbedding[]
+  auditEvents        AuditEvent[]
+  requestLogs        RequestLog[]
+  systemLogs         SystemLog[]
+  apiKeys            ApiKey[]
+  webhookEndpoints   WebhookEndpoint[]
+
+  @@index([status])
+  @@index([plan])
+}
+
+model Organization {
+  id       String             @id @default(cuid())
+  tenantId String
+  name     String
+  type     OrganizationType   @default(CLIENT)
+  status   OrganizationStatus @default(ACTIVE)
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  memberships      Membership[]
+  usageRecords     UsageRecord[]
+  costBudgets      CostBudget[]
+  notifications    Notification[]
+  documents        Document[]
+  apiKeys          ApiKey[]
+  webhookEndpoints WebhookEndpoint[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([status])
+}
+
+model User {
+  id          String     @id @default(cuid())
+  clerkUserId String     @unique
+  email       String     @unique
+  name        String?
+  status      UserStatus @default(ACTIVE)
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  memberships        Membership[]
+  memoriesCreated    Memory[]                 @relation("MemoryCreatedBy")
+  memoryVersions     MemoryVersion[]          @relation("MemoryVersionCreatedBy")
+  sensitiveAccesses  SensitiveAccess[]
+  sensitiveSessions  SensitiveSession[]
+  sensitiveAuditLogs SensitiveAuditLog[]
+  conversations      Conversation[]
+  aiTraces           AITrace[]
+  usageRecords       UsageRecord[]
+  notifications      Notification[]
+  notificationPrefs  NotificationPreference[]
+  toolExecutions     ToolExecution[]
+  toolConfirmations  ToolConfirmation[]
+  documentsUploaded  Document[]               @relation("DocumentUploadedBy")
+  auditEvents        AuditEvent[]
+  requestLogs        RequestLog[]
+  apiKeys            ApiKey[]
+  routingDecisions   RoutingDecision[]
+
+  @@index([email])
+  @@index([status])
+}
+
+model Membership {
+  id             String @id @default(cuid())
+  tenantId       String
+  organizationId String
+  userId         String
+  role           Role
+  permissions    Json
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, organizationId, userId])
+  @@index([tenantId])
+  @@index([organizationId])
+  @@index([userId])
+  @@index([role])
+}
+
+model ProductContext {
+  id       String            @id @default(cuid())
+  tenantId String
+  key      ProductContextKey
+  name     String
+  tone     String
+  enabled  Boolean           @default(true)
+  limits   Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  costLedgers      CostLedger[]
+  costBudgets      CostBudget[]
+  usageRecords     UsageRecord[]
+  notifications    Notification[]
+  toolExecutions   ToolExecution[]
+  domainEvents     DomainEvent[]
+  outboxEvents     OutboxEvent[]
+  modelRoutes      ModelRoute[]
+  routingPolicies  RoutingPolicy[]
+  routingDecisions RoutingDecision[]
+  providerUsages   ProviderUsage[]
+  knowledgeSources KnowledgeSource[]
+  documents        Document[]
+  auditEvents      AuditEvent[]
+  requestLogs      RequestLog[]
+  apiKeys          ApiKey[]
+  webhookEndpoints WebhookEndpoint[]
+  costAlerts       CostAlert[]
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@index([key])
+}
+
+model Memory {
+  id            String        @id @default(cuid())
+  tenantId      String
+  ownerType     OwnerType
+  ownerId       String
+  type          MemoryType
+  content       String        @db.Text
+  confidence    Int           @default(80)
+  securityLevel SecurityLevel @default(INTERNAL)
+  status        MemoryStatus  @default(ACTIVE)
+
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  archivedAt  DateTime?
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  createdBy User?  @relation("MemoryCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  versions MemoryVersion[]
+
+  @@index([tenantId])
+  @@index([ownerType, ownerId])
+  @@index([type])
+  @@index([securityLevel])
+  @@index([status])
+}
+
+model MemoryVersion {
+  id              String  @id @default(cuid())
+  memoryId        String
+  previousContent String  @db.Text
+  newContent      String  @db.Text
+  reason          String
+  createdById     String?
+
+  createdAt DateTime @default(now())
+
+  memory    Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+  createdBy User?  @relation("MemoryVersionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([memoryId])
+  @@index([createdById])
+}
+
+model SensitiveAccess {
+  id             String    @id @default(cuid())
+  userId         String
+  tenantId       String
+  codeHash       String
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  sessions SensitiveSession[]
+
+  @@unique([userId, tenantId])
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model SensitiveSession {
+  id        String               @id @default(cuid())
+  userId    String
+  tenantId  String
+  accessId  String?
+  mode      SensitiveSessionMode
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  access SensitiveAccess? @relation(fields: [accessId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+}
+
+model SensitiveAuditLog {
+  id       String               @id @default(cuid())
+  userId   String?
+  tenantId String
+  action   SensitiveAuditAction
+  result   AuditResult
+  reason   String?
+
+  createdAt DateTime @default(now())
+
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([action])
+  @@index([result])
+  @@index([createdAt])
+}
+
+model Conversation {
+  id             String             @id @default(cuid())
+  tenantId       String
+  userId         String
+  productContext ProductContextKey
+  title          String?
+  status         ConversationStatus @default(ACTIVE)
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  messages         Message[]
+  aiTraces         AITrace[]
+  toolExecutions   ToolExecution[]
+  routingDecisions RoutingDecision[]
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([productContext])
+  @@index([status])
+}
+
+model Message {
+  id             String        @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String        @db.Text
+  securityLevel  SecurityLevel @default(INTERNAL)
+  tokenCount     Int?
+
+  createdAt DateTime @default(now())
+
+  conversation   Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  toolExecutions ToolExecution[]
+
+  @@index([conversationId])
+  @@index([role])
+  @@index([securityLevel])
+  @@index([createdAt])
+}
+
+model AITrace {
+  id                   String            @id @default(cuid())
+  requestId            String            @unique
+  tenantId             String
+  userId               String?
+  conversationId       String?
+  productContext       ProductContextKey
+  modelProvider        String
+  modelName            String
+  permissionsEvaluated Json?
+  sensitiveSessionUsed Boolean           @default(false)
+  confidenceSummary    String?
+  costEstimate         Decimal?          @db.Decimal(10, 6)
+  summary              String?           @db.Text
+
+  createdAt DateTime @default(now())
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user             User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  conversation     Conversation?     @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  routingDecisions RoutingDecision[]
+  toolExecutions   ToolExecution[]
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([conversationId])
+  @@index([productContext])
+  @@index([createdAt])
+}
+
+model UsageRecord {
+  id               String             @id @default(cuid())
+  tenantId         String
+  organizationId   String?
+  userId           String?
+  productContextId String?
+  productContext   ProductContextKey?
+  providerUsageId  String?
+  toolExecutionId  String?
+  documentId       String?
+  requestId        String?
+  idempotencyKey   String?
+  type             UsageType
+  quantity         Decimal            @db.Decimal(18, 6)
+  unit             String
+  metadata         Json?
+  occurredAt       DateTime           @default(now())
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  archivedAt       DateTime?
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  organization   Organization?   @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  user           User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  product        ProductContext? @relation(fields: [productContextId], references: [id], onDelete: SetNull)
+  providerUsage  ProviderUsage?  @relation(fields: [providerUsageId], references: [id], onDelete: SetNull)
+  toolExecution  ToolExecution?  @relation(fields: [toolExecutionId], references: [id], onDelete: SetNull)
+  document       Document?       @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  costLedgerRows CostLedger[]
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId])
+  @@index([organizationId])
+  @@index([userId])
+  @@index([productContextId])
+  @@index([productContext])
+  @@index([providerUsageId])
+  @@index([toolExecutionId])
+  @@index([documentId])
+  @@index([requestId])
+  @@index([idempotencyKey])
+  @@index([type])
+  @@index([occurredAt])
+  @@index([createdAt])
+}
+
+model CostLedger {
+  id            String              @id @default(cuid())
+  tenantId      String
+  usageRecordId String?
+  budgetId      String?
+  entryType     CostLedgerEntryType
+  amount        Decimal             @db.Decimal(12, 6)
+  currency      String              @default("USD")
+  description   String?
+  metadata      Json?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  archivedAt    DateTime?
+
+  tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  usageRecord      UsageRecord?    @relation(fields: [usageRecordId], references: [id], onDelete: SetNull)
+  budget           CostBudget?     @relation(fields: [budgetId], references: [id], onDelete: SetNull)
+  productContext   ProductContext? @relation(fields: [productContextId], references: [id])
+  productContextId String?
+
+  @@index([tenantId])
+  @@index([usageRecordId])
+  @@index([budgetId])
+  @@index([entryType])
+  @@index([createdAt])
+}
+
+model CostBudget {
+  id               String           @id @default(cuid())
+  tenantId         String
+  organizationId   String?
+  productContextId String?
+  name             String
+  period           CostBudgetPeriod
+  limitAmount      Decimal          @db.Decimal(12, 2)
+  currency         String           @default("USD")
+  startsAt         DateTime
+  endsAt           DateTime?
+  hardLimit        Boolean          @default(false)
+  metadata         Json?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  archivedAt       DateTime?
+
+  tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  organization Organization?   @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  product      ProductContext? @relation(fields: [productContextId], references: [id], onDelete: SetNull)
+  ledgerRows   CostLedger[]
+  alerts       CostAlert[]
+
+  @@unique([tenantId, name, startsAt])
+  @@index([tenantId])
+  @@index([organizationId])
+  @@index([productContextId])
+  @@index([period])
+  @@index([startsAt])
+  @@index([endsAt])
+  @@index([createdAt])
+}
+
+model CostAlert {
+  id               String               @id @default(cuid())
+  tenantId         String
+  budgetId         String?
+  productContextId String?
+  status           CostAlertStatus      @default(ACTIVE)
+  severity         NotificationSeverity
+  thresholdPercent Decimal              @db.Decimal(6, 2)
+  message          String
+  triggeredAt      DateTime             @default(now())
+  resolvedAt       DateTime?
+  metadata         Json?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  archivedAt       DateTime?
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  budget  CostBudget?     @relation(fields: [budgetId], references: [id], onDelete: SetNull)
+  product ProductContext? @relation(fields: [productContextId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([budgetId])
+  @@index([productContextId])
+  @@index([status])
+  @@index([severity])
+  @@index([triggeredAt])
+  @@index([createdAt])
+}
+
+model Notification {
+  id               String               @id @default(cuid())
+  tenantId         String
+  organizationId   String?
+  userId           String?
+  productContextId String?
+  type             String
+  severity         NotificationSeverity
+  status           NotificationStatus   @default(PENDING)
+  title            String
+  body             String               @db.Text
+  recommendation   String?              @db.Text
+  metadata         Json?
+  readAt           DateTime?
+  dismissedAt      DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  archivedAt       DateTime?
+
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  organization Organization?       @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  user         User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  product      ProductContext?     @relation(fields: [productContextId], references: [id], onDelete: SetNull)
+  events       NotificationEvent[]
+
+  @@index([tenantId])
+  @@index([organizationId])
+  @@index([userId])
+  @@index([productContextId])
+  @@index([type])
+  @@index([severity])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model NotificationPreference {
+  id         String              @id @default(cuid())
+  tenantId   String
+  userId     String
+  channel    NotificationChannel
+  type       String
+  enabled    Boolean             @default(true)
+  settings   Json?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+  archivedAt DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, userId, channel, type])
+  @@index([tenantId])
+  @@index([userId])
+  @@index([channel])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model NotificationEvent {
+  id             String              @id @default(cuid())
+  tenantId       String
+  notificationId String
+  channel        NotificationChannel
+  status         NotificationStatus
+  externalId     String?
+  metadata       Json?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  archivedAt     DateTime?
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([notificationId])
+  @@index([channel])
+  @@index([status])
+  @@index([externalId])
+  @@index([createdAt])
+}
+
+model ToolRegistry {
+  id                   String     @id @default(cuid())
+  tenantId             String
+  key                  String
+  name                 String
+  description          String?
+  status               ToolStatus @default(ACTIVE)
+  requiredScopes       Json
+  confirmationRequired Boolean    @default(true)
+  configuration        Json?
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  archivedAt           DateTime?
+
+  tenant     Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  executions ToolExecution[]
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@index([key])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ToolExecution {
+  id               String              @id @default(cuid())
+  tenantId         String
+  toolId           String
+  userId           String?
+  conversationId   String?
+  messageId        String?
+  aiTraceId        String?
+  productContextId String?
+  requestId        String?
+  idempotencyKey   String?
+  status           ToolExecutionStatus @default(PENDING)
+  input            Json
+  output           Json?
+  errorMessage     String?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  archivedAt       DateTime?
+
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tool          ToolRegistry       @relation(fields: [toolId], references: [id], onDelete: Restrict)
+  user          User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  conversation  Conversation?      @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  message       Message?           @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  aiTrace       AITrace?           @relation(fields: [aiTraceId], references: [id], onDelete: SetNull)
+  product       ProductContext?    @relation(fields: [productContextId], references: [id], onDelete: SetNull)
+  confirmations ToolConfirmation[]
+  usageRecords  UsageRecord[]
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId])
+  @@index([toolId])
+  @@index([userId])
+  @@index([conversationId])
+  @@index([messageId])
+  @@index([aiTraceId])
+  @@index([productContextId])
+  @@index([requestId])
+  @@index([idempotencyKey])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ToolConfirmation {
+  id                String                 @id @default(cuid())
+  tenantId          String
+  toolExecutionId   String
+  userId            String?
+  status            ToolConfirmationStatus @default(PENDING)
+  approvalTokenHash String?
+  expiresAt         DateTime
+  decidedAt         DateTime?
+  reason            String?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  archivedAt        DateTime?
+
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  toolExecution ToolExecution @relation(fields: [toolExecutionId], references: [id], onDelete: Restrict)
+  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([toolExecutionId])
+  @@index([userId])
+  @@index([status])
+  @@index([expiresAt])
+  @@index([createdAt])
+}
+
+model DomainEvent {
+  id               String      @id @default(cuid())
+  tenantId         String
+  productContextId String?
+  type             String
+  source           String
+  aggregateType    String?
+  aggregateId      String?
+  status           EventStatus @default(PENDING)
+  payload          Json
+  metadata         Json?
+  occurredAt       DateTime    @default(now())
+  processedAt      DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  archivedAt       DateTime?
+
+  tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  product      ProductContext? @relation(fields: [productContextId], references: [id], onDelete: SetNull)
+  outboxEvents OutboxEvent[]
+
+  @@index([tenantId])
+  @@index([productContextId])
+  @@index([type])
+  @@index([source])
+  @@index([aggregateType, aggregateId])
+  @@index([status])
+  @@index([occurredAt])
+  @@index([createdAt])
+}
+
+model OutboxEvent {
+  id               String      @id @default(cuid())
+  tenantId         String
+  domainEventId    String?
+  productContextId String?
+  type             String
+  destination      String?
+  idempotencyKey   String
+  status           EventStatus @default(PENDING)
+  payload          Json
+  metadata         Json?
+  availableAt      DateTime    @default(now())
+  processedAt      DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  archivedAt       DateTime?
+
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  domainEvent DomainEvent?      @relation(fields: [domainEventId], references: [id], onDelete: SetNull)
+  product     ProductContext?   @relation(fields: [productContextId], references: [id], onDelete: SetNull)
+  deliveries  WebhookDelivery[]
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId])
+  @@index([domainEventId])
+  @@index([productContextId])
+  @@index([type])
+  @@index([destination])
+  @@index([idempotencyKey])
+  @@index([status])
+  @@index([availableAt])
+  @@index([createdAt])
+}
+
+model WebhookDelivery {
+  id                String                @id @default(cuid())
+  tenantId          String
+  outboxEventId     String
+  webhookEndpointId String?
+  status            WebhookDeliveryStatus @default(PENDING)
+  attemptCount      Int                   @default(0)
+  nextAttemptAt     DateTime?
+  deliveredAt       DateTime?
+  responseStatus    Int?
+  responseBody      String?               @db.Text
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  archivedAt        DateTime?
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outboxEvent     OutboxEvent      @relation(fields: [outboxEventId], references: [id], onDelete: Restrict)
+  webhookEndpoint WebhookEndpoint? @relation(fields: [webhookEndpointId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([outboxEventId])
+  @@index([webhookEndpointId])
+  @@index([status])
+  @@index([nextAttemptAt])
+  @@index([deliveredAt])
+  @@index([createdAt])
+}
+
+model ModelProvider {
+  id         String              @id @default(cuid())
+  tenantId   String
+  key        String
+  name       String
+  status     ModelProviderStatus @default(ACTIVE)
+  baseUrl    String?
+  config     Json?
+  secretHash String?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+  archivedAt DateTime?
+
+  tenant           Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  routes           ModelRoute[]
+  routingDecisions RoutingDecision[]
+  usageRecords     ProviderUsage[]
+  embeddings       DocumentEmbedding[]
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@index([key])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ModelRoute {
+  id               String    @id @default(cuid())
+  tenantId         String
+  productContextId String?
+  providerId       String
+  taskType         String
+  modelName        String
+  priority         Int       @default(100)
+  enabled          Boolean   @default(true)
+  constraints      Json?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  archivedAt       DateTime?
+
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  product   ProductContext?   @relation(fields: [productContextId], references: [id], onDelete: SetNull)
+  provider  ModelProvider     @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  decisions RoutingDecision[]
+
+  @@unique([tenantId, productContextId, taskType, providerId, modelName])
+  @@index([tenantId])
+  @@index([productContextId])
+  @@index([providerId])
+  @@index([taskType])
+  @@index([enabled])
+  @@index([createdAt])
+}
+
+model RoutingPolicy {
+  id               String    @id @default(cuid())
+  tenantId         String
+  productContextId String?
+  name             String
+  rules            Json
+  fallbackRules    Json?
+  enabled          Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  archivedAt       DateTime?
+
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  product   ProductContext?   @relation(fields: [productContextId], references: [id], onDelete: SetNull)
+  decisions RoutingDecision[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([productContextId])
+  @@index([enabled])
+  @@index([createdAt])
+}
+
+model RoutingDecision {
+  id               String                @id @default(cuid())
+  tenantId         String
+  productContextId String?
+  routeId          String?
+  providerId       String?
+  policyId         String?
+  requestId        String
+  userId           String?
+  conversationId   String?
+  aiTraceId        String?
+  taskType         String
+  status           RoutingDecisionStatus @default(SELECTED)
+  selectedModel    String?
+  fallbackReason   String?
+  latencyMs        Int?
+  metadata         Json?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  archivedAt       DateTime?
+
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  product       ProductContext? @relation(fields: [productContextId], references: [id], onDelete: SetNull)
+  route         ModelRoute?     @relation(fields: [routeId], references: [id], onDelete: SetNull)
+  provider      ModelProvider?  @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  policy        RoutingPolicy?  @relation(fields: [policyId], references: [id], onDelete: SetNull)
+  user          User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  conversation  Conversation?   @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  aiTrace       AITrace?        @relation(fields: [aiTraceId], references: [id], onDelete: SetNull)
+  providerUsage ProviderUsage[]
+
+  @@unique([tenantId, requestId])
+  @@index([tenantId])
+  @@index([productContextId])
+  @@index([routeId])
+  @@index([providerId])
+  @@index([policyId])
+  @@index([userId])
+  @@index([conversationId])
+  @@index([aiTraceId])
+  @@index([requestId])
+  @@index([taskType])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ProviderUsage {
+  id                String    @id @default(cuid())
+  tenantId          String
+  productContextId  String?
+  providerId        String
+  routingDecisionId String?
+  requestId         String?
+  modelName         String
+  inputTokens       Int       @default(0)
+  outputTokens      Int       @default(0)
+  totalTokens       Int       @default(0)
+  estimatedCost     Decimal?  @db.Decimal(12, 6)
+  currency          String    @default("USD")
+  latencyMs         Int?
+  metadata          Json?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  archivedAt        DateTime?
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  product         ProductContext?  @relation(fields: [productContextId], references: [id], onDelete: SetNull)
+  provider        ModelProvider    @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  routingDecision RoutingDecision? @relation(fields: [routingDecisionId], references: [id], onDelete: SetNull)
+  usageRecords    UsageRecord[]
+
+  @@index([tenantId])
+  @@index([productContextId])
+  @@index([providerId])
+  @@index([routingDecisionId])
+  @@index([requestId])
+  @@index([modelName])
+  @@index([createdAt])
+}
+
+model KnowledgeSource {
+  id               String                @id @default(cuid())
+  tenantId         String
+  productContextId String?
+  type             KnowledgeSourceType
+  status           KnowledgeSourceStatus @default(ACTIVE)
+  name             String
+  externalId       String?
+  uriHash          String?
+  metadata         Json?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  archivedAt       DateTime?
+
+  tenant    Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  product   ProductContext? @relation(fields: [productContextId], references: [id], onDelete: SetNull)
+  documents Document[]
+
+  @@unique([tenantId, externalId])
+  @@index([tenantId])
+  @@index([productContextId])
+  @@index([type])
+  @@index([status])
+  @@index([externalId])
+  @@index([uriHash])
+  @@index([createdAt])
+}
+
+model Document {
+  id                String         @id @default(cuid())
+  tenantId          String
+  organizationId    String?
+  productContextId  String?
+  knowledgeSourceId String?
+  uploadedById      String?
+  ownerType         OwnerType
+  ownerId           String
+  status            DocumentStatus @default(UPLOADED)
+  securityLevel     SecurityLevel  @default(INTERNAL)
+  storageKey        String
+  storageBucket     String?
+  fileName          String
+  mimeType          String?
+  sizeBytes         BigInt?
+  checksumHash      String?
+  metadata          Json?
+  processedAt       DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  archivedAt        DateTime?
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  organization    Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  product         ProductContext?  @relation(fields: [productContextId], references: [id], onDelete: SetNull)
+  knowledgeSource KnowledgeSource? @relation(fields: [knowledgeSourceId], references: [id], onDelete: SetNull)
+  uploadedBy      User?            @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  chunks          DocumentChunk[]
+  usageRecords    UsageRecord[]
+
+  @@unique([tenantId, storageKey])
+  @@index([tenantId])
+  @@index([organizationId])
+  @@index([productContextId])
+  @@index([knowledgeSourceId])
+  @@index([uploadedById])
+  @@index([ownerType, ownerId])
+  @@index([status])
+  @@index([securityLevel])
+  @@index([checksumHash])
+  @@index([createdAt])
+}
+
+model DocumentChunk {
+  id         String    @id @default(cuid())
+  tenantId   String
+  documentId String
+  chunkIndex Int
+  content    String    @db.Text
+  tokenCount Int?
+  pageNumber Int?
+  section    String?
+  metadata   Json?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  document  Document           @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  embedding DocumentEmbedding?
+
+  @@unique([documentId, chunkIndex])
+  @@index([tenantId])
+  @@index([documentId])
+  @@index([chunkIndex])
+  @@index([createdAt])
+}
+
+model DocumentEmbedding {
+  id              String          @id @default(cuid())
+  tenantId        String
+  documentChunkId String          @unique
+  providerId      String?
+  modelName       String
+  status          EmbeddingStatus @default(PENDING)
+  embedding       Json?
+  dimensions      Int?
+  indexedAt       DateTime?
+  errorMessage    String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  archivedAt      DateTime?
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  documentChunk DocumentChunk  @relation(fields: [documentChunkId], references: [id], onDelete: Cascade)
+  provider      ModelProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([providerId])
+  @@index([modelName])
+  @@index([status])
+  @@index([indexedAt])
+  @@index([createdAt])
+}
+
+model AuditEvent {
+  id               String         @id @default(cuid())
+  tenantId         String
+  userId           String?
+  productContextId String?
+  requestId        String?
+  type             AuditEventType
+  action           String
+  resourceType     String?
+  resourceId       String?
+  result           AuditResult
+  ipHash           String?
+  userAgentHash    String?
+  metadata         Json?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  archivedAt       DateTime?
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user    User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  product ProductContext? @relation(fields: [productContextId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([productContextId])
+  @@index([requestId])
+  @@index([type])
+  @@index([action])
+  @@index([resourceType, resourceId])
+  @@index([result])
+  @@index([createdAt])
+}
+
+model RequestLog {
+  id               String        @id @default(cuid())
+  tenantId         String
+  userId           String?
+  productContextId String?
+  requestId        String
+  method           String
+  path             String
+  status           RequestStatus @default(RECEIVED)
+  httpStatus       Int?
+  durationMs       Int?
+  ipHash           String?
+  userAgentHash    String?
+  metadata         Json?
+  startedAt        DateTime      @default(now())
+  completedAt      DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  archivedAt       DateTime?
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user    User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  product ProductContext? @relation(fields: [productContextId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, requestId])
+  @@index([tenantId])
+  @@index([userId])
+  @@index([productContextId])
+  @@index([requestId])
+  @@index([method])
+  @@index([path])
+  @@index([status])
+  @@index([httpStatus])
+  @@index([startedAt])
+  @@index([createdAt])
+}
+
+model SystemLog {
+  id         String         @id @default(cuid())
+  tenantId   String?
+  level      SystemLogLevel
+  type       AuditEventType
+  message    String
+  requestId  String?
+  metadata   Json?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  archivedAt DateTime?
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([level])
+  @@index([type])
+  @@index([requestId])
+  @@index([createdAt])
+}
+
+model ApiKey {
+  id             String       @id @default(cuid())
+  tenantId       String
+  organizationId String?
+  userId         String?
+  name           String
+  keyHash        String       @unique
+  status         ApiKeyStatus @default(ACTIVE)
+  scopes         Json
+  lastUsedAt     DateTime?
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  archivedAt     DateTime?
+
+  tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  organization     Organization?   @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  user             User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  productContext   ProductContext? @relation(fields: [productContextId], references: [id])
+  productContextId String?
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([organizationId])
+  @@index([userId])
+  @@index([status])
+  @@index([keyHash])
+  @@index([lastUsedAt])
+  @@index([expiresAt])
+  @@index([createdAt])
+}
+
+model WebhookEndpoint {
+  id               String                @id @default(cuid())
+  tenantId         String
+  organizationId   String?
+  productContextId String?
+  name             String
+  url              String
+  secretHash       String?
+  status           WebhookEndpointStatus @default(ACTIVE)
+  events           Json
+  metadata         Json?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  archivedAt       DateTime?
+
+  tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  organization Organization?     @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  product      ProductContext?   @relation(fields: [productContextId], references: [id], onDelete: SetNull)
+  deliveries   WebhookDelivery[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([organizationId])
+  @@index([productContextId])
+  @@index([status])
+  @@index([createdAt])
+}
