@@ -1,4 +1,10 @@
 import { verifyWebhook } from "@clerk/nextjs/webhooks";
+import {
+  ClerkUserSyncError,
+  deactivateClerkUserDeleted,
+  syncClerkUserCreated,
+  syncClerkUserUpdated,
+} from "@/intelligence/authentication/user-sync";
 import { type NextRequest, NextResponse } from "next/server";
 
 const supportedClerkUserEvents = new Set([
@@ -27,7 +33,32 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // Phase 5 will perform user synchronization. Phase 4 only verifies and acknowledges.
+  try {
+    if (event.type === "user.created") {
+      await syncClerkUserCreated(event.data);
+    }
+
+    if (event.type === "user.updated") {
+      await syncClerkUserUpdated(event.data);
+    }
+
+    if (event.type === "user.deleted") {
+      await deactivateClerkUserDeleted(event.data);
+    }
+  } catch (error) {
+    if (error instanceof ClerkUserSyncError) {
+      return NextResponse.json(
+        { error: "Clerk user synchronization failed." },
+        { status: error.statusCode },
+      );
+    }
+
+    return NextResponse.json(
+      { error: "Clerk webhook processing failed." },
+      { status: 500 },
+    );
+  }
+
   return NextResponse.json({
     received: true,
     type: event.type,
