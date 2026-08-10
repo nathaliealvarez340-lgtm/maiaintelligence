@@ -1,4 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { emitIdentityEvent, IdentityEventNames } from "../observability/identity-events";
 
 import {
   type AuthorizationContext,
@@ -45,6 +46,13 @@ export const requireTenantAccess = async (
   const authorizedContext = await requireAuthorizationContext(context);
 
   if (!tenantId || tenantId !== authorizedContext.tenantId) {
+    emitAuthorizationDenied("TENANT_ACCESS_DENIED", "require_tenant_access", {
+      userId: authorizedContext.userId,
+      clerkUserId: authorizedContext.clerkUserId,
+      tenantId: authorizedContext.tenantId,
+      organizationId: authorizedContext.organizationId,
+      membershipId: authorizedContext.membershipId,
+    });
     throw new AuthorizationError(
       "TENANT_ACCESS_DENIED",
       "Tenant access is denied.",
@@ -61,6 +69,13 @@ export const requireOrganizationAccess = async (
   const authorizedContext = await requireAuthorizationContext(context);
 
   if (!organizationId || organizationId !== authorizedContext.organizationId) {
+    emitAuthorizationDenied("ORGANIZATION_ACCESS_DENIED", "require_organization_access", {
+      userId: authorizedContext.userId,
+      clerkUserId: authorizedContext.clerkUserId,
+      tenantId: authorizedContext.tenantId,
+      organizationId: authorizedContext.organizationId,
+      membershipId: authorizedContext.membershipId,
+    });
     throw new AuthorizationError(
       "ORGANIZATION_ACCESS_DENIED",
       "Organization access is denied.",
@@ -77,6 +92,13 @@ export const requirePermissionAccess = async (
   const authorizedContext = await requireAuthorizationContext(context);
 
   if (!permission || !authorizedContext.permissions.includes(permission)) {
+    emitAuthorizationDenied("PERMISSION_DENIED", "require_permission_access", {
+      userId: authorizedContext.userId,
+      clerkUserId: authorizedContext.clerkUserId,
+      tenantId: authorizedContext.tenantId,
+      organizationId: authorizedContext.organizationId,
+      membershipId: authorizedContext.membershipId,
+    });
     throw new AuthorizationError(
       "PERMISSION_DENIED",
       "User permission is not allowed.",
@@ -118,10 +140,35 @@ export const memoryVersionScopedWhere = (
 const requireResourceId = (resourceId: string) => {
   const normalizedResourceId = resourceId.trim();
   if (!normalizedResourceId) {
+    emitAuthorizationDenied("RESOURCE_ID_REQUIRED", "scope_resource_access");
     throw new AuthorizationError(
       "RESOURCE_ID_REQUIRED",
       "Resource ID is required.",
     );
   }
   return normalizedResourceId;
+};
+
+const emitAuthorizationDenied = (
+  reason: string,
+  operation: string,
+  context?: {
+    userId?: string;
+    clerkUserId?: string | null;
+    tenantId?: string;
+    organizationId?: string;
+    membershipId?: string;
+  },
+) => {
+  emitIdentityEvent({
+    event: IdentityEventNames.authorizationDenied,
+    severity: "warn",
+    reason,
+    operation,
+    userId: context?.userId,
+    clerkUserId: context?.clerkUserId ?? undefined,
+    tenantId: context?.tenantId,
+    organizationId: context?.organizationId,
+    membershipId: context?.membershipId,
+  });
 };

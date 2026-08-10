@@ -16,6 +16,7 @@ import type {
 import { getAuthenticationPrismaClient } from "@/intelligence/authentication/prisma-client";
 import { rolePermissions } from "@/intelligence/authorization/role-permissions";
 import { Roles } from "@/intelligence/contracts/enums";
+import { emitIdentityEvent, IdentityEventNames } from "@/intelligence/observability/identity-events";
 import { MaiaError } from "@/intelligence/shared/errors";
 
 const DEFAULT_TENANT_NAME = "MAIA Intelligence";
@@ -47,118 +48,148 @@ export const bootstrapFirstUser = async (
 ): Promise<FirstUserBootstrapResult> => {
   const userId = normalizeUserId(input.userId);
 
-  return prisma.$transaction(async (tx) => {
-    const user = assertEligibleBootstrapUser(await tx.user.findUnique({
-      where: { id: userId },
-      select: { id: true, status: true, archivedAt: true },
-    }));
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const user = assertEligibleBootstrapUser(await tx.user.findUnique({
+        where: { id: userId },
+        select: { id: true, status: true, archivedAt: true },
+      }));
 
-    const existingOwnerMembership = await tx.membership.findFirst({
-      where: {
+      emitIdentityEvent({
+        event: IdentityEventNames.bootstrapStarted,
+        severity: "info",
         userId: user.id,
-        role: Role.OWNER,
-        archivedAt: null,
-      },
-      select: {
-        id: true,
-        role: true,
-        tenant: { select: { id: true } },
-        organization: { select: { id: true } },
-      },
-    });
-
-    if (existingOwnerMembership) {
-      return toBootstrapResult({
-        user,
-        tenant: existingOwnerMembership.tenant,
-        organization: existingOwnerMembership.organization,
-        membership: existingOwnerMembership,
+        operation: "first_user_bootstrap",
       });
-    }
 
-    const tenant = await tx.tenant.upsert({
-      where: { slug: DEFAULT_TENANT_SLUG },
-      create: {
-        name: DEFAULT_TENANT_NAME,
-        slug: DEFAULT_TENANT_SLUG,
-        status: TenantStatus.ACTIVE,
-        plan: TenantPlan.STARTER,
-      },
-      update: {
-        status: TenantStatus.ACTIVE,
-        archivedAt: null,
-      },
-      select: { id: true },
-    });
+      const existingOwnerMembership = await tx.membership.findFirst({
+        where: {
+          userId: user.id,
+          role: Role.OWNER,
+          archivedAt: null,
+        },
+        select: {
+          id: true,
+          role: true,
+          tenant: { select: { id: true } },
+          organization: { select: { id: true } },
+        },
+      });
 
-    const organization = await tx.organization.upsert({
-      where: {
-        tenantId_name: {
+      if (existingOwnerMembership) {
+        return toBootstrapResult({
+          user,
+          tenant: existingOwnerMembership.tenant,
+          organization: existingOwnerMembership.organization,
+          membership: existingOwnerMembership,
+        });
+      }
+
+      const tenant = await tx.tenant.upsert({
+        where: { slug: DEFAULT_TENANT_SLUG },
+        create: {
+          name: DEFAULT_TENANT_NAME,
+          slug: DEFAULT_TENANT_SLUG,
+          status: TenantStatus.ACTIVE,
+          plan: TenantPlan.STARTER,
+        },
+        update: {
+          status: TenantStatus.ACTIVE,
+          archivedAt: null,
+        },
+        select: { id: true },
+      });
+
+      const organization = await tx.organization.upsert({
+        where: {
+          tenantId_name: {
+            tenantId: tenant.id,
+            name: DEFAULT_ORGANIZATION_NAME,
+          },
+        },
+        create: {
           tenantId: tenant.id,
           name: DEFAULT_ORGANIZATION_NAME,
+          type: OrganizationType.INTERNAL,
+          status: OrganizationStatus.ACTIVE,
         },
-      },
-      create: {
-        tenantId: tenant.id,
-        name: DEFAULT_ORGANIZATION_NAME,
-        type: OrganizationType.INTERNAL,
-        status: OrganizationStatus.ACTIVE,
-      },
-      update: {
-        type: OrganizationType.INTERNAL,
-        status: OrganizationStatus.ACTIVE,
-        archivedAt: null,
-      },
-      select: { id: true },
-    });
+        update: {
+          type: OrganizationType.INTERNAL,
+          status: OrganizationStatus.ACTIVE,
+          archivedAt: null,
+        },
+        select: { id: true },
+      });
 
-    const existingTenantOwnerMembership = await tx.membership.findFirst({
-      where: {
-        tenantId: tenant.id,
-        organizationId: organization.id,
-        role: Role.OWNER,
-        archivedAt: null,
-      },
-      select: {
-        id: true,
-        userId: true,
-      },
-    });
+      const existingTenantOwnerMembership = await tx.membership.findFirst({
+        where: {
+          tenantId: tenant.id,
+          organizationId: organization.id,
+          role: Role.OWNER,
+          archivedAt: null,
+        },
+        select: {
+          id: true,
+          userId: true,
+        },
+      });
 
-    if (existingTenantOwnerMembership?.userId !== undefined) {
-      throw new MaiaError(
-        "BOOTSTRAP_OWNER_ALREADY_EXISTS",
-        "An active owner membership already exists for this tenant.",
-        409,
-      );
-    }
+      if (existingTenantOwnerMembership?.userId !== undefined) {
+        throw new MaiaError(
+          "BOOTSTRAP_OWNER_ALREADY_EXISTS",
+          "An active owner membership already exists for this tenant.",
+          409,
+        );
+      }
 
-    // The compound unique key makes repeat bootstrap calls for the same user idempotent.
-    const membership = await tx.membership.upsert({
-      where: {
-        tenantId_organizationId_userId: {
+      // The compound unique key makes repeat bootstrap calls for the same user idempotent.
+      const membership = await tx.membership.upsert({
+        where: {
+          tenantId_organizationId_userId: {
+            tenantId: tenant.id,
+            organizationId: organization.id,
+            userId: user.id,
+          },
+        },
+        create: {
           tenantId: tenant.id,
           organizationId: organization.id,
           userId: user.id,
+          role: Role.OWNER,
+          permissions: rolePermissions[Roles.owner],
         },
-      },
-      create: {
-        tenantId: tenant.id,
-        organizationId: organization.id,
-        userId: user.id,
-        role: Role.OWNER,
-        permissions: rolePermissions[Roles.owner],
-      },
-      update: {
-        role: Role.OWNER,
-        permissions: rolePermissions[Roles.owner],
-        archivedAt: null,
-      },
-      select: { id: true, role: true },
+        update: {
+          role: Role.OWNER,
+          permissions: rolePermissions[Roles.owner],
+          archivedAt: null,
+        },
+        select: { id: true, role: true },
+      });
+
+      return toBootstrapResult({ user, tenant, organization, membership });
     });
 
-    return toBootstrapResult({ user, tenant, organization, membership });
-  });
+    emitIdentityEvent({
+      event: IdentityEventNames.bootstrapCompleted,
+      severity: "info",
+      userId: result.userId,
+      tenantId: result.tenantId,
+      organizationId: result.organizationId,
+      membershipId: result.membershipId,
+      operation: "first_user_bootstrap",
+    });
+
+    return result;
+  } catch (error) {
+    emitIdentityEvent({
+      event: IdentityEventNames.bootstrapFailed,
+      severity: "error",
+      userId,
+      operation: "first_user_bootstrap",
+      reason: error instanceof MaiaError ? error.code : "BOOTSTRAP_FAILED",
+    });
+    throw error;
+  }
 };
 
 const normalizeUserId = (userId: string) => {
