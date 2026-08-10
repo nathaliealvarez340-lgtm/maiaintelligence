@@ -3,6 +3,7 @@ import type { PrismaClient, User } from "@/generated/prisma/client";
 
 import type { AuthenticatedUser } from "./auth-service";
 import { getAuthenticationPrismaClient } from "./prisma-client";
+import { emitIdentityEvent, IdentityEventNames } from "@/intelligence/observability/identity-events";
 
 export interface ClerkUserLike {
   id: string;
@@ -41,37 +42,89 @@ export class ClerkUserSyncError extends Error {
 export const syncClerkUserCreated = async (
   user: ClerkUserLike,
   prisma: UserClient = getAuthenticationPrismaClient().user,
-): Promise<User> => upsertClerkUser(user, prisma);
+): Promise<User> => {
+  try {
+    const syncedUser = await upsertClerkUser(user, prisma);
+    emitIdentityEvent({
+      event: IdentityEventNames.userSyncCreated,
+      severity: "info",
+      userId: syncedUser.id,
+      clerkUserId: syncedUser.clerkUserId,
+      operation: "user.created",
+    });
+    return syncedUser;
+  } catch (error) {
+    emitUserSyncFailure(user.id, "user.created");
+    throw error;
+  }
+};
 
 export const syncClerkUserUpdated = async (
   user: ClerkUserLike,
   prisma: UserClient = getAuthenticationPrismaClient().user,
-): Promise<User> => upsertClerkUser(user, prisma);
+): Promise<User> => {
+  try {
+    const syncedUser = await upsertClerkUser(user, prisma);
+    emitIdentityEvent({
+      event: IdentityEventNames.userSyncUpdated,
+      severity: "info",
+      userId: syncedUser.id,
+      clerkUserId: syncedUser.clerkUserId,
+      operation: "user.updated",
+    });
+    return syncedUser;
+  } catch (error) {
+    emitUserSyncFailure(user.id, "user.updated");
+    throw error;
+  }
+};
 
 export const deactivateClerkUserDeleted = async (
   user: { id?: string | null },
   prisma: UserClient = getAuthenticationPrismaClient().user,
 ): Promise<User | null> => {
-  const clerkUserId = normalizeRequiredString(user.id, "Clerk user ID is required.");
-  const existingUser = await prisma.findUnique({
-    where: { clerkUserId },
-  });
+  try {
+    const clerkUserId = normalizeRequiredString(user.id, "Clerk user ID is required.");
+    const existingUser = await prisma.findUnique({
+      where: { clerkUserId },
+    });
 
-  if (!existingUser) {
-    return null;
+    if (!existingUser) {
+      return null;
+    }
+
+    if (existingUser.status === UserStatus.ARCHIVED && existingUser.archivedAt) {
+      emitIdentityEvent({
+        event: IdentityEventNames.userSyncDeactivated,
+        severity: "info",
+        userId: existingUser.id,
+        clerkUserId: existingUser.clerkUserId,
+        operation: "user.deleted",
+      });
+      return existingUser;
+    }
+
+    const deactivatedUser = await prisma.update({
+      where: { clerkUserId },
+      data: {
+        status: UserStatus.ARCHIVED,
+        archivedAt: new Date(),
+      },
+    });
+
+    emitIdentityEvent({
+      event: IdentityEventNames.userSyncDeactivated,
+      severity: "info",
+      userId: deactivatedUser.id,
+      clerkUserId: deactivatedUser.clerkUserId,
+      operation: "user.deleted",
+    });
+
+    return deactivatedUser;
+  } catch (error) {
+    emitUserSyncFailure(user.id, "user.deleted");
+    throw error;
   }
-
-  if (existingUser.status === UserStatus.ARCHIVED && existingUser.archivedAt) {
-    return existingUser;
-  }
-
-  return prisma.update({
-    where: { clerkUserId },
-    data: {
-      status: UserStatus.ARCHIVED,
-      archivedAt: new Date(),
-    },
-  });
 };
 
 const upsertClerkUser = async (
@@ -139,4 +192,13 @@ const normalizeRequiredString = (value: string | null | undefined, message: stri
 const normalizeOptionalString = (value: string | null | undefined) => {
   const normalizedValue = value?.trim();
   return normalizedValue ? normalizedValue : undefined;
+};
+
+const emitUserSyncFailure = (clerkUserId: string | null | undefined, operation: string) => {
+  emitIdentityEvent({
+    event: IdentityEventNames.userSyncFailed,
+    severity: "error",
+    clerkUserId: normalizeOptionalString(clerkUserId),
+    operation,
+  });
 };

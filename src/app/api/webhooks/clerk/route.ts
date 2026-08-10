@@ -5,6 +5,7 @@ import {
   syncClerkUserCreated,
   syncClerkUserUpdated,
 } from "@/intelligence/authentication/user-sync";
+import { emitIdentityEvent, IdentityEventNames } from "@/intelligence/observability/identity-events";
 import { type NextRequest, NextResponse } from "next/server";
 
 const supportedClerkUserEvents = new Set([
@@ -19,6 +20,12 @@ export async function POST(request: NextRequest) {
   try {
     event = await verifyWebhook(request);
   } catch {
+    emitIdentityEvent({
+      event: IdentityEventNames.webhookVerificationFailed,
+      severity: "warn",
+      operation: "clerk_webhook",
+      reason: "INVALID_WEBHOOK_SIGNATURE",
+    });
     return NextResponse.json(
       { error: "Invalid webhook request." },
       { status: 400 },
@@ -46,6 +53,13 @@ export async function POST(request: NextRequest) {
       await deactivateClerkUserDeleted(event.data);
     }
   } catch (error) {
+    emitIdentityEvent({
+      event: IdentityEventNames.webhookProcessingFailed,
+      severity: "error",
+      operation: event.type,
+      reason: error instanceof ClerkUserSyncError ? "USER_SYNC_FAILED" : "WEBHOOK_PROCESSING_FAILED",
+    });
+
     if (error instanceof ClerkUserSyncError) {
       return NextResponse.json(
         { error: "Clerk user synchronization failed." },

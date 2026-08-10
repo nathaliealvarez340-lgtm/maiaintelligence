@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { Role, TenantStatus, OrganizationStatus, UserStatus } from "@/generated/prisma/enums";
 import type { PrismaClient } from "@/generated/prisma/client";
 import { getAuthenticationPrismaClient } from "@/intelligence/authentication/prisma-client";
+import { emitIdentityEvent, IdentityEventNames } from "@/intelligence/observability/identity-events";
 
 export type AuthorizationContextFailureReason =
   | "UNAUTHENTICATED"
@@ -138,7 +139,7 @@ export const resolveAuthorizationContext = async (
     return unauthorized("TENANT_INACTIVE", clerkUserId);
   }
 
-  return {
+  const authorizedContext: AuthorizedContext = {
     userId: user.id,
     clerkUserId: user.clerkUserId,
     tenantId: tenant.id,
@@ -149,24 +150,47 @@ export const resolveAuthorizationContext = async (
     isAuthenticated: true,
     isAuthorized: true,
   };
+
+  emitIdentityEvent({
+    event: IdentityEventNames.authorizationResolved,
+    severity: "info",
+    userId: authorizedContext.userId,
+    clerkUserId: authorizedContext.clerkUserId,
+    tenantId: authorizedContext.tenantId,
+    organizationId: authorizedContext.organizationId,
+    membershipId: authorizedContext.membershipId,
+    operation: "resolve_authorization_context",
+  });
+
+  return authorizedContext;
 };
 
 const unauthorized = (
   reason: AuthorizationContextFailureReason,
   clerkUserId: string | null,
   isAuthenticated = true,
-): UnauthorizedContext => ({
-  userId: null,
-  clerkUserId,
-  tenantId: null,
-  organizationId: null,
-  membershipId: null,
-  role: null,
-  permissions: [],
-  isAuthenticated,
-  isAuthorized: false,
-  reason,
-});
+): UnauthorizedContext => {
+  emitIdentityEvent({
+    event: IdentityEventNames.authorizationDenied,
+    severity: "warn",
+    clerkUserId: clerkUserId ?? undefined,
+    reason,
+    operation: "resolve_authorization_context",
+  });
+
+  return {
+    userId: null,
+    clerkUserId,
+    tenantId: null,
+    organizationId: null,
+    membershipId: null,
+    role: null,
+    permissions: [],
+    isAuthenticated,
+    isAuthorized: false,
+    reason,
+  };
+};
 
 const isResolvableMembership = (membership: {
   tenantId: string;
