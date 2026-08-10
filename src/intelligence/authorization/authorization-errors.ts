@@ -1,8 +1,13 @@
-import { MaiaError } from "@/intelligence/shared/errors";
+import { MaiaError } from "../shared/errors";
 
 export class AuthorizationError extends MaiaError {
-  constructor(code: string, message: string, details?: Record<string, unknown>) {
-    super(code, message, 403, details);
+  constructor(
+    code: string,
+    message: string,
+    details?: Record<string, unknown>,
+    status = 403,
+  ) {
+    super(code, message, status, details);
     this.name = "AuthorizationError";
   }
 }
