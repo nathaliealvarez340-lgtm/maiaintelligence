@@ -27,7 +27,11 @@ export const mapClerkUserToInternalUser = (user: ClerkUserLike): AuthenticatedUs
   email: user.primaryEmailAddress?.emailAddress,
 });
 
-type UserClient = Pick<PrismaClient["user"], "findUnique" | "update" | "upsert">;
+type UserClient = Pick<
+  PrismaClient["user"],
+  "findUnique" | "create" | "update" | "upsert"
+>;
+type UserReadRepairClient = Pick<UserClient, "findUnique" | "create">;
 
 export class ClerkUserSyncError extends Error {
   constructor(
@@ -55,6 +59,56 @@ export const syncClerkUserCreated = async (
     return syncedUser;
   } catch (error) {
     emitUserSyncFailure(user.id, "user.created");
+    throw error;
+  }
+};
+
+export const syncClerkUserReadRepair = async (
+  user: ClerkUserLike,
+  prisma: UserReadRepairClient = getAuthenticationPrismaClient().user,
+): Promise<User> => {
+  try {
+    const identity = getClerkUserPersistenceData(user);
+    const existingUser = await prisma.findUnique({
+      where: { clerkUserId: identity.clerkUserId },
+    });
+    if (existingUser) {
+      return existingUser;
+    }
+
+    try {
+      const createdUser = await prisma.create({
+        data: {
+          ...identity,
+          status: UserStatus.ACTIVE,
+          archivedAt: null,
+        },
+      });
+
+      emitIdentityEvent({
+        event: IdentityEventNames.userSyncCreated,
+        severity: "info",
+        userId: createdUser.id,
+        clerkUserId: createdUser.clerkUserId,
+        operation: "authorization.read_repair",
+      });
+      return createdUser;
+    } catch (error) {
+      if (!isUniqueConstraintViolation(error)) {
+        throw error;
+      }
+
+      const concurrentlyCreatedUser = await prisma.findUnique({
+        where: { clerkUserId: identity.clerkUserId },
+      });
+      if (!concurrentlyCreatedUser) {
+        throw error;
+      }
+
+      return concurrentlyCreatedUser;
+    }
+  } catch (error) {
+    emitUserSyncFailure(user.id, "authorization.read_repair");
     throw error;
   }
 };
@@ -131,30 +185,40 @@ const upsertClerkUser = async (
   user: ClerkUserLike,
   prisma: UserClient,
 ): Promise<User> => {
-  const clerkUserId = normalizeRequiredString(user.id, "Clerk user ID is required.");
-  const email = normalizeRequiredString(
-    getPrimaryEmailAddress(user),
-    "Primary email is required to synchronize a MAIA user.",
-  );
-  const name = getDisplayName(user);
+  const identity = getClerkUserPersistenceData(user);
 
   return prisma.upsert({
-    where: { clerkUserId },
+    where: { clerkUserId: identity.clerkUserId },
     create: {
-      clerkUserId,
-      email,
-      name,
+      ...identity,
       status: UserStatus.ACTIVE,
       archivedAt: null,
     },
     update: {
-      email,
-      name,
+      email: identity.email,
+      name: identity.name,
       status: UserStatus.ACTIVE,
       archivedAt: null,
     },
   });
 };
+
+const getClerkUserPersistenceData = (user: ClerkUserLike) => ({
+  clerkUserId: normalizeRequiredString(user.id, "Clerk user ID is required."),
+  email: normalizeRequiredString(
+    getPrimaryEmailAddress(user),
+    "Primary email is required to synchronize a MAIA user.",
+  ),
+  name: getDisplayName(user),
+});
+
+const isUniqueConstraintViolation = (
+  error: unknown,
+): error is { code: "P2002" } =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  error.code === "P2002";
 
 const getPrimaryEmailAddress = (user: ClerkUserLike) => {
   const sdkEmail = user.primaryEmailAddress?.emailAddress;

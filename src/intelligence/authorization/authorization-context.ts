@@ -1,8 +1,16 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { Role, TenantStatus, OrganizationStatus, UserStatus } from "@/generated/prisma/enums";
 import type { PrismaClient } from "@/generated/prisma/client";
 import { getAuthenticationPrismaClient } from "@/intelligence/authentication/prisma-client";
+import { syncClerkUserReadRepair } from "@/intelligence/authentication/user-sync";
 import { emitIdentityEvent, IdentityEventNames } from "@/intelligence/observability/identity-events";
+import { bootstrapFirstUser } from "@/intelligence/tenancy/bootstrap";
+import {
+  repairAuthenticatedUser,
+  runAuthenticatedFirstAccessFlow,
+  type FirstAccessFailureReason,
+  type InternalAuthorizationResolution,
+} from "./first-access-flow";
 
 export type AuthorizationContextFailureReason =
   | "UNAUTHENTICATED"
@@ -13,7 +21,8 @@ export type AuthorizationContextFailureReason =
   | "ORGANIZATION_NOT_FOUND"
   | "ORGANIZATION_INACTIVE"
   | "TENANT_NOT_FOUND"
-  | "TENANT_INACTIVE";
+  | "TENANT_INACTIVE"
+  | FirstAccessFailureReason;
 
 export interface AuthorizedContext {
   userId: string;
@@ -48,9 +57,36 @@ export const resolveAuthorizationContext = async (
   const { userId: clerkUserId } = await auth();
 
   if (!clerkUserId) {
-    return unauthorized("UNAUTHENTICATED", null, false);
+    return finalizeAuthorizationResolution({
+      context: unauthorized("UNAUTHENTICATED", null, false),
+      internalUserId: null,
+    });
   }
 
+  const resolution = await runAuthenticatedFirstAccessFlow<AuthorizationContext>({
+    resolveInternalContext: () =>
+      resolveInternalAuthorizationContext(clerkUserId, prisma),
+    repairUser: () =>
+      repairAuthenticatedUser(clerkUserId, currentUser, (trustedUser) =>
+        syncClerkUserReadRepair(trustedUser, prisma.user),
+      ),
+    bootstrapUser: async (internalUserId) => {
+      const result = await bootstrapFirstUser({ userId: internalUserId }, prisma);
+      return result.outcome;
+    },
+    createFailureResolution: (reason, internalUserId) => ({
+      context: unauthorized(reason, clerkUserId),
+      internalUserId,
+    }),
+  });
+
+  return finalizeAuthorizationResolution(resolution);
+};
+
+const resolveInternalAuthorizationContext = async (
+  clerkUserId: string,
+  prisma: PrismaClient,
+): Promise<InternalAuthorizationResolution<AuthorizationContext>> => {
   const user = await prisma.user.findUnique({
     where: { clerkUserId },
     select: {
@@ -100,11 +136,17 @@ export const resolveAuthorizationContext = async (
   });
 
   if (!user) {
-    return unauthorized("USER_NOT_FOUND", clerkUserId);
+    return internalResolution(
+      unauthorized("USER_NOT_FOUND", clerkUserId),
+      null,
+    );
   }
 
   if (user.status !== UserStatus.ACTIVE || user.archivedAt) {
-    return unauthorized("USER_INACTIVE", clerkUserId);
+    return internalResolution(
+      unauthorized("USER_INACTIVE", clerkUserId),
+      user.id,
+    );
   }
 
   const membership = user.memberships.find((candidateMembership) =>
@@ -112,31 +154,49 @@ export const resolveAuthorizationContext = async (
   );
 
   if (!membership) {
-    return unauthorized("MEMBERSHIP_NOT_FOUND", clerkUserId);
+    return internalResolution(
+      unauthorized("MEMBERSHIP_NOT_FOUND", clerkUserId),
+      user.id,
+    );
   }
 
   if (membership.archivedAt) {
-    return unauthorized("MEMBERSHIP_INACTIVE", clerkUserId);
+    return internalResolution(
+      unauthorized("MEMBERSHIP_INACTIVE", clerkUserId),
+      user.id,
+    );
   }
 
   if (!membership.organization) {
-    return unauthorized("ORGANIZATION_NOT_FOUND", clerkUserId);
+    return internalResolution(
+      unauthorized("ORGANIZATION_NOT_FOUND", clerkUserId),
+      user.id,
+    );
   }
 
   if (
     membership.organization.status !== OrganizationStatus.ACTIVE ||
     membership.organization.archivedAt
   ) {
-    return unauthorized("ORGANIZATION_INACTIVE", clerkUserId);
+    return internalResolution(
+      unauthorized("ORGANIZATION_INACTIVE", clerkUserId),
+      user.id,
+    );
   }
 
   const tenant = membership.organization.tenant ?? membership.tenant;
   if (!tenant) {
-    return unauthorized("TENANT_NOT_FOUND", clerkUserId);
+    return internalResolution(
+      unauthorized("TENANT_NOT_FOUND", clerkUserId),
+      user.id,
+    );
   }
 
   if (tenant.status !== TenantStatus.ACTIVE || tenant.archivedAt) {
-    return unauthorized("TENANT_INACTIVE", clerkUserId);
+    return internalResolution(
+      unauthorized("TENANT_INACTIVE", clerkUserId),
+      user.id,
+    );
   }
 
   const authorizedContext: AuthorizedContext = {
@@ -151,45 +211,60 @@ export const resolveAuthorizationContext = async (
     isAuthorized: true,
   };
 
-  emitIdentityEvent({
-    event: IdentityEventNames.authorizationResolved,
-    severity: "info",
-    userId: authorizedContext.userId,
-    clerkUserId: authorizedContext.clerkUserId,
-    tenantId: authorizedContext.tenantId,
-    organizationId: authorizedContext.organizationId,
-    membershipId: authorizedContext.membershipId,
-    operation: "resolve_authorization_context",
-  });
-
-  return authorizedContext;
+  return internalResolution(authorizedContext, user.id);
 };
 
 const unauthorized = (
   reason: AuthorizationContextFailureReason,
   clerkUserId: string | null,
   isAuthenticated = true,
-): UnauthorizedContext => {
-  emitIdentityEvent({
-    event: IdentityEventNames.authorizationDenied,
-    severity: "warn",
-    clerkUserId: clerkUserId ?? undefined,
-    reason,
-    operation: "resolve_authorization_context",
-  });
+): UnauthorizedContext => ({
+  userId: null,
+  clerkUserId,
+  tenantId: null,
+  organizationId: null,
+  membershipId: null,
+  role: null,
+  permissions: [],
+  isAuthenticated,
+  isAuthorized: false,
+  reason,
+});
 
-  return {
-    userId: null,
-    clerkUserId,
-    tenantId: null,
-    organizationId: null,
-    membershipId: null,
-    role: null,
-    permissions: [],
-    isAuthenticated,
-    isAuthorized: false,
-    reason,
-  };
+const internalResolution = (
+  context: AuthorizationContext,
+  internalUserId: string | null,
+): InternalAuthorizationResolution<AuthorizationContext> => ({
+  context,
+  internalUserId,
+});
+
+const finalizeAuthorizationResolution = (
+  resolution: InternalAuthorizationResolution<AuthorizationContext>,
+): AuthorizationContext => {
+  if (resolution.context.isAuthorized) {
+    emitIdentityEvent({
+      event: IdentityEventNames.authorizationResolved,
+      severity: "info",
+      userId: resolution.context.userId,
+      clerkUserId: resolution.context.clerkUserId,
+      tenantId: resolution.context.tenantId,
+      organizationId: resolution.context.organizationId,
+      membershipId: resolution.context.membershipId,
+      operation: "resolve_authorization_context",
+    });
+  } else {
+    emitIdentityEvent({
+      event: IdentityEventNames.authorizationDenied,
+      severity: "warn",
+      userId: resolution.internalUserId ?? undefined,
+      clerkUserId: resolution.context.clerkUserId ?? undefined,
+      reason: resolution.context.reason,
+      operation: "resolve_authorization_context",
+    });
+  }
+
+  return resolution.context;
 };
 
 const isResolvableMembership = (membership: {
