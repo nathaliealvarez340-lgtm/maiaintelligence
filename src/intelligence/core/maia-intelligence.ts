@@ -9,6 +9,17 @@ import type { ContextEngine } from "@/intelligence/context/context-engine";
 import { TraceService } from "@/intelligence/audit/trace-service";
 import type { ReasoningEngine } from "@/intelligence/reasoning/reasoning-engine";
 import { ReasoningPipeline } from "@/intelligence/reasoning/reasoning-pipeline";
+import { Role } from "../../generated/prisma/enums";
+import {
+  resolveServerAuthorizationContext,
+  type AuthorizationResolver,
+} from "../authorization/authorization-resolver";
+import { AuthorizationError } from "../authorization/authorization-errors";
+import {
+  requireAuthorizationContext,
+  requirePermissionAccess,
+} from "../authorization/authorization-enforcement";
+import { Permissions } from "../contracts/enums";
 import type { MaiaCore } from "./maia-core";
 
 export class MaiaIntelligence implements MaiaCore {
@@ -20,24 +31,64 @@ export class MaiaIntelligence implements MaiaCore {
     private readonly pipeline: ReasoningPipeline,
     private readonly composer = new ContextComposer(),
     private readonly traces = new TraceService(),
+    private readonly resolveAuthorization: AuthorizationResolver = resolveServerAuthorizationContext,
   ) {}
 
   async execute(request: IntelligenceRequest): Promise<IntelligenceResponse> {
+    const authorization = await this.resolveAuthorization();
+    if (
+      !authorization ||
+      typeof authorization.isAuthenticated !== "boolean" ||
+      typeof authorization.isAuthorized !== "boolean"
+    ) {
+      throw new AuthorizationError(
+        "AUTHORIZATION_CONTEXT_REQUIRED",
+        "A valid MAIA authorization context is required.",
+      );
+    }
+
+    const authorizedContext = await requireAuthorizationContext(authorization);
+    if (
+      !authorizedContext.isAuthenticated ||
+      [
+        authorizedContext.userId,
+        authorizedContext.clerkUserId,
+        authorizedContext.tenantId,
+        authorizedContext.organizationId,
+        authorizedContext.membershipId,
+      ].some((id) => typeof id !== "string" || !id.trim()) ||
+      !Object.values(Role).includes(authorizedContext.role) ||
+      !Array.isArray(authorizedContext.permissions) ||
+      !authorizedContext.permissions.every((permission) => typeof permission === "string")
+    ) {
+      throw new AuthorizationError(
+        "AUTHORIZATION_CONTEXT_REQUIRED",
+        "A valid MAIA authorization context is required.",
+      );
+    }
+
+    await requirePermissionAccess(Permissions.chatUse, authorizedContext);
+
     const decision = await this.reasoning.reason(request);
-    const businessContext = await this.context.build(request);
+    const businessContext = await this.context.build(request, authorizedContext);
     const agent = this.agents.get(decision.agentId);
     const contextPackage = this.composer.compose({
       request: {
         requestId: request.requestId,
-        tenantId: request.tenantId,
+        tenantId: authorizedContext.tenantId,
         user: {
-          id: request.userId ?? "system",
-          clerkUserId: request.userId ?? "system",
+          id: authorizedContext.userId,
+          clerkUserId: authorizedContext.clerkUserId,
         },
-        role: "member",
-        permissions: ["chat:use", "memory:read"],
+        membershipId: authorizedContext.membershipId,
+        role: authorizedContext.role,
+        permissions: authorizedContext.permissions,
+        organization: {
+          id: authorizedContext.organizationId,
+          tenantId: authorizedContext.tenantId,
+        },
         productContext: request.productContext,
-        sensitiveAccess: "metadata",
+        sensitiveAccess: "none",
       },
       businessContext,
     });
@@ -53,7 +104,7 @@ export class MaiaIntelligence implements MaiaCore {
     );
     const trace = this.traces.createTrace({
       requestId: request.requestId,
-      tenantId: request.tenantId,
+      tenantId: authorizedContext.tenantId,
       productContext: request.productContext,
       providerId: "configured-provider",
       summary: reasoningResult.traceSummary,
@@ -61,7 +112,7 @@ export class MaiaIntelligence implements MaiaCore {
 
     return {
       requestId: request.requestId,
-      tenantId: request.tenantId,
+      tenantId: authorizedContext.tenantId,
       productContext: request.productContext,
       productId: request.productId ?? request.productContext,
       domain: decision.domain,
