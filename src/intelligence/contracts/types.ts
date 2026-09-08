@@ -38,12 +38,10 @@ export type BusinessContextHints = Partial<
 
 export interface IntelligenceRequest {
   requestId: string;
-  tenantId: string;
   productContext: ProductContextId;
   productId?: string;
   message: string;
   contextHints?: BusinessContextHints;
-  userId?: string;
 }
 
 export interface ReasoningDecision {
