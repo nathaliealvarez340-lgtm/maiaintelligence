@@ -197,8 +197,6 @@ const upsertClerkUser = async (
     update: {
       email: identity.email,
       name: identity.name,
-      status: UserStatus.ACTIVE,
-      archivedAt: null,
     },
   });
 };
